@@ -27,6 +27,10 @@ import enchant
 
 NAME = "sscout"
 VERSION = "0.0.1"
+LANGUAGE = {
+    "en": "en",
+    "jp": "jp",
+}
 
 enchant_dict = enchant.Dict("en_US")
 re_word = re.compile(r"[a-zA-Z]")
@@ -42,8 +46,10 @@ def main(args) -> None:
     valid_lines = get_valid_lines(subtitle_path, args)
     content = "\n".join(valid_lines)
 
-    words = remove_known_words(split_into_words(content))
-    tfile = write_tfile(words)
+    lang = check_language(content)
+
+    words = remove_known_words(split_into_words(content), lang)
+    tfile = write_tfile(words, lang)
     subprocess.Popen(("vim", tfile)).wait()
 
     unknown_words = []
@@ -53,7 +59,7 @@ def main(args) -> None:
             if w != "":
                 unknown_words.append(w)
 
-    add_known_words(set(words) - set(unknown_words))
+    add_known_words(set(words) - set(unknown_words), lang)
 
     top_unknown_words = unknown_words[0:20]
     topfile = pathlib.Path("/mnt/user-data-app/static-resource").joinpath(f"{NAME}.top-words.{tfile.name}")
@@ -64,7 +70,6 @@ def main(args) -> None:
 
 
 def get_valid_lines(subtitle_path, args):
-    print(args)
     name = subtitle_path.name.lower()
     if name.endswith(".ass"):
         return get_valid_lines_ass(subtitle_path, args["--style"])
@@ -98,8 +103,8 @@ def get_valid_lines_srt(subtitle_path):
         return f.readlines()
 
 
-def remove_known_words(words):
-    all_known_words = get_known_words()
+def remove_known_words(words, lang):
+    all_known_words = get_known_words(lang)
 
     unknown_words = []
     for word in words:
@@ -109,8 +114,11 @@ def remove_known_words(words):
     return unknown_words
 
 
-def add_known_words(words):
-    with open(get_known_file(), "a") as f:
+def add_known_words(words, lang):
+    if len(words) == 0:
+        return
+
+    with open(get_known_file(lang), "a") as f:
         f.write("\n".join(words) + "\n")
 
 
@@ -126,16 +134,16 @@ def get_cache_dir():
     return d
 
 
-def get_known_file():
-    f = get_home_dir().joinpath("known-words.txt")
+def get_known_file(lang):
+    f = get_home_dir().joinpath(f"known-words.{lang}.txt")
     if not f.exists():
         f.touch()
     return f
 
 
-def get_known_words():
+def get_known_words(lang):
     words = set()
-    with open(get_known_file(), "r") as f:
+    with open(get_known_file(lang), "r") as f:
         for word in f.readlines():
             w = word.strip()
             if w != "":
@@ -143,8 +151,8 @@ def get_known_words():
     return words
 
 
-def write_tfile(words):
-    tfilename = get_cache_dir().joinpath(f"{time.strftime('%Y%m%d%H%M%S')}.txt")
+def write_tfile(words, lang):
+    tfilename = get_cache_dir().joinpath(f"{time.strftime('%Y%m%d%H%M%S')}.{lang}.txt")
     with open(tfilename, "w") as f:
         f.write("\n".join(words))
     return tfilename
@@ -170,6 +178,22 @@ def split_into_words(content) -> set:
         infos[token] += 1
 
     return [word for word, _ in sorted(infos.items(), key=lambda items: -items[1])]
+
+
+def check_language(content):
+    if check_japanese(content):
+        return LANGUAGE["jp"]
+    else:
+        return LANGUAGE["en"]
+
+
+def check_japanese(content):
+    all_count = len(content)
+    if all_count == 0:
+        return False
+
+    match_count = re.findall(r"[\u2E80-\u9FFF]", content)
+    return len(match_count) / all_count > 0.1
 
 
 if __name__ == "__main__":
