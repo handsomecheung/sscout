@@ -1,3 +1,5 @@
 pyenchant
 nltk
 numpy
+docopt
+ass

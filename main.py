@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""sscout - subtitle scout
+
+Usage:
+    sscout [options] <path>
+
+Arguments:
+    <path>                The path to the subtitle
+
+Options:
+    --style <style>       style for ssa font
+"""
+
 import os
 import re
 import sys
@@ -8,21 +20,29 @@ import time
 import pathlib
 import subprocess
 
+import ass
 import nltk
+import docopt
 import enchant
 
 NAME = "sscout"
+VERSION = "0.0.1"
 
 enchant_dict = enchant.Dict("en_US")
 re_word = re.compile(r"[a-zA-Z]")
 
 
-def main() -> None:
-    if len(sys.argv) != 2:
-        print(f"usage: python {sys.argv[0]} ${{subtitle_file}}")
+def main(args) -> None:
+    subtitle_path = pathlib.Path(args["<path>"])
+
+    if not subtitle_path.exists():
+        print(f"subtitle {subtitle_path} not exists")
         sys.exit(1)
 
-    words = remove_known_words(split_into_words(sys.argv[1]))
+    valid_lines = get_valid_lines(subtitle_path, args)
+    content = "\n".join(valid_lines)
+
+    words = remove_known_words(split_into_words(content))
     tfile = write_tfile(words)
     subprocess.Popen(("vim", tfile)).wait()
 
@@ -41,6 +61,41 @@ def main() -> None:
         f.write("\n".join(top_unknown_words) + "\n")
 
     print(f"open https://static-server.uen.site/{topfile.name}")
+
+
+def get_valid_lines(subtitle_path, args):
+    print(args)
+    name = subtitle_path.name.lower()
+    if name.endswith(".ass"):
+        return get_valid_lines_ass(subtitle_path, args["--style"])
+    elif name.endswith(".srt"):
+        return get_valid_lines_srt(subtitle_path)
+    else:
+        raise Exception("supported format")
+
+
+def get_valid_lines_ass(subtitle_path, style):
+    with open(subtitle_path, encoding="utf_8_sig") as f:
+        doc = ass.parse(f)
+
+    styles = [s.name for s in doc.styles]
+    if not style:
+        if len(styles) == 1:
+            style = styles[0]
+        else:
+            print(f"no style. set style to one of {styles}")
+            sys.exit(1)
+
+    if style not in styles:
+        print(f"style must be one of {styles}")
+        sys.exit(1)
+
+    return [e.text for e in doc.events if e.style == style]
+
+
+def get_valid_lines_srt(subtitle_path):
+    with open(subtitle_path, "r") as f:
+        return f.readlines()
 
 
 def remove_known_words(words):
@@ -99,14 +154,8 @@ def is_word(token):
     return len(token) > 1 and enchant_dict.check(token) and re_word.match(token)
 
 
-def read_subtitle(filename: str) -> str:
-    with open(filename, "r") as f:
-        return f.read()
-
-
-def split_into_words(filename: str) -> set:
+def split_into_words(content) -> set:
     infos = {}
-    content = read_subtitle(filename)
     for token in nltk.tokenize.word_tokenize(content):
         if token.endswith(".") and token.count(".") == 1:
             token = token.replace(".", "")
@@ -124,4 +173,5 @@ def split_into_words(filename: str) -> set:
 
 
 if __name__ == "__main__":
-    main()
+    args = docopt.docopt(__doc__, version=VERSION)
+    main(args)
