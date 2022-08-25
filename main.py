@@ -21,19 +21,12 @@ import pathlib
 import subprocess
 
 import ass
-import nltk
 import docopt
-import enchant
+
+import lang
 
 NAME = "sscout"
 VERSION = "0.0.1"
-LANGUAGE = {
-    "en": "en",
-    "jp": "jp",
-}
-
-enchant_dict = enchant.Dict("en_US")
-re_word = re.compile(r"[a-zA-Z]")
 
 
 def main(args) -> None:
@@ -46,10 +39,10 @@ def main(args) -> None:
     valid_lines = get_valid_lines(subtitle_path, args)
     content = "\n".join(valid_lines)
 
-    lang = check_language(content)
+    language = lang.init_language(content)
 
-    words = remove_known_words(split_into_words(content), lang)
-    tfile = write_tfile(words, lang)
+    words = remove_known_words(language.split_into_words(), language.name)
+    tfile = write_tfile(words, language.name)
     subprocess.Popen(("vim", tfile)).wait()
 
     unknown_words = []
@@ -59,7 +52,7 @@ def main(args) -> None:
             if w != "":
                 unknown_words.append(w)
 
-    add_known_words(set(words) - set(unknown_words), lang)
+    add_known_words(set(words) - set(unknown_words), language.name)
 
     top_unknown_words = unknown_words[0:20]
     topfile = pathlib.Path("/mnt/user-data-app/static-resource").joinpath(f"{NAME}.top-words.{tfile.name}")
@@ -156,44 +149,6 @@ def write_tfile(words, lang):
     with open(tfilename, "w") as f:
         f.write("\n".join(words))
     return tfilename
-
-
-def is_word(token):
-    return len(token) > 1 and enchant_dict.check(token) and re_word.match(token)
-
-
-def split_into_words(content) -> set:
-    infos = {}
-    for token in nltk.tokenize.word_tokenize(content):
-        if token.endswith(".") and token.count(".") == 1:
-            token = token.replace(".", "")
-
-        if not is_word(token):
-            continue
-
-        token = token.lower()
-        if token not in infos:
-            infos[token] = 0
-
-        infos[token] += 1
-
-    return [word for word, _ in sorted(infos.items(), key=lambda items: -items[1])]
-
-
-def check_language(content):
-    if check_japanese(content):
-        return LANGUAGE["jp"]
-    else:
-        return LANGUAGE["en"]
-
-
-def check_japanese(content):
-    all_count = len(content)
-    if all_count == 0:
-        return False
-
-    match_count = re.findall(r"[\u2E80-\u9FFF]", content)
-    return len(match_count) / all_count > 0.1
 
 
 if __name__ == "__main__":
