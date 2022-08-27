@@ -16,7 +16,6 @@ Options:
 import os
 import re
 import sys
-import time
 import pathlib
 import subprocess
 
@@ -24,9 +23,7 @@ import ass
 import docopt
 
 import lang
-
-NAME = "sscout"
-VERSION = "0.0.1"
+import common
 
 
 def main(args) -> None:
@@ -39,10 +36,10 @@ def main(args) -> None:
     valid_lines = get_valid_lines(subtitle_path, args)
     content = "\n".join(valid_lines)
 
-    language = lang.init_language(content)
+    language = lang.init_language(content, subtitle_path)
 
     words = remove_known_words(language.split_into_words(), language.name)
-    tfile = write_tfile(words, language.name)
+    tfile = write_tfile(words, language.name, subtitle_path)
     subprocess.Popen(("vim", tfile)).wait()
 
     unknown_words = []
@@ -55,7 +52,7 @@ def main(args) -> None:
     add_known_words(set(words) - set(unknown_words), language.name)
 
     top_unknown_words = unknown_words[0:20]
-    topfile = pathlib.Path("/mnt/user-data-app/static-resource").joinpath(f"{NAME}.top-words.{tfile.name}")
+    topfile = pathlib.Path("/mnt/user-data-app/static-resource").joinpath(f"{common.NAME}.top-words.{tfile.name}")
     with open(topfile, "w") as f:
         f.write("\n".join(top_unknown_words) + "\n")
 
@@ -115,20 +112,8 @@ def add_known_words(words, lang):
         f.write("\n".join(words) + "\n")
 
 
-def get_home_dir():
-    d = pathlib.Path.home().joinpath(f".{NAME}")
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def get_cache_dir():
-    d = get_home_dir().joinpath("cache")
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
 def get_known_file(lang):
-    f = get_home_dir().joinpath(f"known-words.{lang}.txt")
+    f = common.get_home_dir().joinpath(f"known-words.{lang}.txt")
     if not f.exists():
         f.touch()
     return f
@@ -144,13 +129,13 @@ def get_known_words(lang):
     return words
 
 
-def write_tfile(words, lang):
-    tfilename = get_cache_dir().joinpath(f"{time.strftime('%Y%m%d%H%M%S')}.{lang}.txt")
+def write_tfile(words, lang, subtitle_path):
+    tfilename = common.get_cache_file(lang, f"{subtitle_path.stem}.word")
     with open(tfilename, "w") as f:
         f.write("\n".join(words))
     return tfilename
 
 
 if __name__ == "__main__":
-    args = docopt.docopt(__doc__, version=VERSION)
+    args = docopt.docopt(__doc__, version=common.VERSION)
     main(args)

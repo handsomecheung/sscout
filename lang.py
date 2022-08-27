@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 
 import re
+import shutil
+import subprocess
+
 import nltk
 import enchant
 import fugashi
+
+import common
 
 LANGUAGE = {
     "en": "en",
@@ -27,20 +32,21 @@ def check_language(content):
         return LANGUAGE["en"]
 
 
-def init_language(content):
+def init_language(content, subtitle_path):
     language = check_language(content)
 
     if language == "en":
-        return English(content)
+        return English(content, subtitle_path)
     elif language == "jp":
-        return Japanese(content)
+        return Japanese(content, subtitle_path)
     else:
         raise Exception(f"invalid language {language}")
 
 
 class Language:
-    def __init__(self, content):
+    def __init__(self, content, subtitle_path):
         self.content = content
+        self.subtitle_path = subtitle_path
 
     def split_into_words(self) -> set:
         infos = {}
@@ -54,8 +60,8 @@ class Language:
 
 
 class English(Language):
-    def __init__(self, content):
-        super().__init__(content)
+    def __init__(self, content, subtitle_path):
+        super().__init__(content, subtitle_path)
 
         self.name = LANGUAGE["en"]
         self.re_word = re.compile(r"[a-zA-Z]")
@@ -76,14 +82,29 @@ class English(Language):
 
 
 class Japanese(Language):
-    def __init__(self, content):
-        super().__init__(content)
+    def __init__(self, content, subtitle_path):
+        super().__init__(content, subtitle_path)
 
         self.name = LANGUAGE["jp"]
         self.tagger = fugashi.Tagger("-Owakati")
 
-    def get_tokens(self) -> list:
+    def get_tokens_auto(self) -> list:
         for word in self.tagger(self.content):
             token = str(word)
             if is_japanese(token):
                 yield token
+
+    def get_tokens_manually(self) -> list:
+        file_content = common.get_cache_file(self.name, f"{self.subtitle_path.stem}.content")
+        with open(file_content, "w") as f:
+            f.write(self.content)
+
+        file_token = common.get_cache_file(self.name, f"{self.subtitle_path.stem}.token")
+        shutil.copy(file_content, file_token)
+        subprocess.Popen(("emacs", "-nw", file_token)).wait()
+
+        with open(file_token, "r") as f:
+            return [line.strip() for line in f.readlines()]
+
+    def get_tokens(self) -> list:
+        return self.get_tokens_manually()
