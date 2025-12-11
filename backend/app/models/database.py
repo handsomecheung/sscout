@@ -2,7 +2,7 @@
 """Database models for backend."""
 
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, create_engine
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, relationship
@@ -12,9 +12,20 @@ from app.core.config import settings
 Base = declarative_base()
 
 
-class Session(Base):
-    """Session model for tracking subtitle processing sessions."""
+class Word(Base):
+    __tablename__ = "words"
 
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    word = Column(String, nullable=False, unique=True, index=True)
+    definition_en = Column(String, nullable=True)
+    definition_jp = Column(String, nullable=True)
+    definition_zh = Column(String, nullable=True)
+
+    session_words = relationship("SessionWord", back_populates="word_entry")
+    user_words = relationship("UserWord", back_populates="word_entry")
+
+
+class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(String, primary_key=True)
@@ -28,17 +39,28 @@ class Session(Base):
 
 
 class SessionWord(Base):
-    """Word model for storing words from a session."""
-
     __tablename__ = "session_words"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
-    word = Column(String, nullable=False)
+    word_id = Column(Integer, ForeignKey("words.id"), nullable=False)
     frequency = Column(Integer, nullable=False, default=1)
     is_removed = Column(Boolean, default=False)  # User marked as "learned"
 
     session = relationship("Session", back_populates="words")
+    word_entry = relationship("Word", back_populates="session_words")
+
+
+class UserWord(Base):
+    __tablename__ = "user_words"
+    __table_args__ = (UniqueConstraint("user_id", "word_id", name="uix_user_word"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, nullable=True, default="default")  # For future user system
+    word_id = Column(Integer, ForeignKey("words.id"), nullable=False)
+    status = Column(String, nullable=False, default="learned")
+
+    word_entry = relationship("Word", back_populates="user_words")
 
 
 engine = create_async_engine(
@@ -51,12 +73,10 @@ AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=F
 
 
 async def get_db():
-    """Dependency for getting database session."""
     async with AsyncSessionLocal() as session:
         yield session
 
 
 async def init_db():
-    """Initialize database tables."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

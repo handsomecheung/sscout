@@ -28,6 +28,8 @@ class Settings(BaseSettings):
 
     SESSION_EXPIRY_HOURS: int = 24
 
+    DEFAULT_USER: str = "default"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

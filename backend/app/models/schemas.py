@@ -55,7 +55,7 @@ class ProcessRequest(BaseModel):
 class ProcessResponse(BaseModel):
     """Schema for process response."""
 
-    words: list[WordItem]
+    pass
 
 
 class FinalizeResponse(BaseModel):
@@ -70,4 +70,21 @@ class KnownWordsResponse(BaseModel):
     """Schema for known words response."""
 
     words: list[str]
+    count: int
+
+
+class UserWordItem(BaseModel):
+    """Schema for a user's learned word."""
+
+    word: str
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class UserWordsResponse(BaseModel):
+    """Schema for user words response."""
+
+    words: list[UserWordItem]
     count: int
