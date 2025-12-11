@@ -103,13 +103,13 @@ class Japanese(Language):
         super().__init__(content, subtitle_path)
 
         self.name = LANGUAGE["jp"]
-        self.tagger = fugashi.Tagger("-Owakati")
+        self.tagger = fugashi.Tagger()
 
     def is_word(self, token):
         return is_japanese(token)
 
     def get_tokens(self) -> list:
         for word in self.tagger(self.content):
-            token = str(word)
+            token = word.feature.lemma if word.feature.lemma else word.surface
             if self.is_word(token):
                 yield token
